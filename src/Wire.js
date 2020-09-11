@@ -107,11 +107,11 @@ export default class Wire {
 
     prepareRender(context, delta) {
         if (this.animationProgress === false) {
-            if ((Math.floor(Math.random() * 100)) < 5) this.animationProgress = -ANIMATION_RANGE;
+            if ((Math.random() * 100) < 0.02) this.animationProgress = -ANIMATION_RANGE;
         } else if (this.animationProgress > this.cells.length) {
             this.animationProgress = false;
         } else {
-            this.animationProgress += delta / 40;
+            this.animationProgress += delta / 50;
         }
 
         if (this.animationProgress !== false) {
