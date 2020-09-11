@@ -17,22 +17,44 @@ export default class PCB {
 
     debug = false;
 
-    draw(sketch) {
-        this.wires.forEach(wire => wire.render(sketch));
-        this.chips.forEach(chip => chip.render(sketch));
+    draw(context, canvas, delta) {
+        const wiresToRender = this.wires.filter(wire => wire.shouldRender);
 
-        if (this.debug) {
-            sketch.fill(0, 0, 0, 0);
-            sketch.stroke(0, 0, 0, 50);
-            this.grid.forEach(row => row.forEach(cell => {
-                sketch.square((cell.x) * CELL_SIZE, (cell.y) * CELL_SIZE, CELL_SIZE);
-            }));
-        }
+        wiresToRender.forEach(wire => wire.prepareRender(context, delta));
+        Wire.setupStaticLinesContext(context);
+        wiresToRender.forEach(wire => wire.renderStaticLines(context));
+        Wire.setupAnimatedLinesContext(context);
+        wiresToRender.forEach(wire => wire.renderAnimatedLines(context));
+        Wire.setupPathEndsContext(context);
+        // wiresToRender.forEach(wire => wire.renderPathEnd(context, 0));
+        const [staticEnds, animatedEnds] = wiresToRender.reduce(([staticEnds, animatedEnds], wire) => {
+            const [newStaticEnds, newAnimatedEnds] = wire.getPathEndRenderers(context);
+
+            return [
+                [...staticEnds, ...newStaticEnds],
+                [...animatedEnds, ...newAnimatedEnds],
+            ]
+        }, [[], []]);
+        Wire.setupStaticPathEndContext(context);
+        staticEnds.forEach(render => render());
+        Wire.setupAnimatedLinesContext(context);
+        animatedEnds.forEach(render => render());
+        wiresToRender.forEach(wire => wire.redraw = false);
+        this.chips.forEach(chip => chip.render(context, canvas, delta));
+
+        // if (this.debug) {
+        //     sketch.fill(0, 0, 0, 0);
+        //     sketch.stroke(0, 0, 0, 50);
+        //     this.grid.forEach(row => row.forEach(cell => {
+        //         sketch.square((cell.x) * CELL_SIZE, (cell.y) * CELL_SIZE, CELL_SIZE);
+        //     }));
+        // }
     }
 
-    resize(sketch) {
-        sketch.resizeCanvas(document.body.scrollWidth, document.body.scrollHeight);
-        this.recreate(sketch);
+    resize(canvas) {
+        canvas.width = document.body.scrollWidth;
+        canvas.height = document.body.scrollHeight;
+        this.recreate(document.body.scrollWidth, document.body.scrollHeight);
     }
 
     cellOverlapsUI(cell) {
@@ -133,9 +155,9 @@ export default class PCB {
         this.wires = [...this.wires, ...wires];
     }
 
-    recreate(sketch) {
-        this.gridWidth = Math.ceil(sketch.width / CELL_SIZE) + 1;
-        this.gridHeight = Math.ceil(sketch.height / CELL_SIZE) + 1;
+    recreate(width, height) {
+        this.gridWidth = Math.ceil(width / CELL_SIZE) + 1;
+        this.gridHeight = Math.ceil(height / CELL_SIZE) + 1;
         this.wires = [];
         this.chips = [];
 
@@ -157,8 +179,6 @@ export default class PCB {
         this.createChip(10, 30);
         this.createChip(10, 30);
         this.createWires();
-
-        sketch.loop();
     }
 
     isCellAvailable(x, y) {

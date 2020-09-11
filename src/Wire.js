@@ -7,10 +7,10 @@ import {
     WIRE_LENGTH
 } from './constants';
 
-const animationRange = 3;
+const ANIMATION_RANGE = 3;
 
-const standardColor = [169, 169, 169];
-const animatedColor = [221, 202, 160];
+const standardColor = 'rgb(169, 169, 169)';
+const animatedColor = 'rgb(221, 202, 160)';
 
 export default class Wire {
     cells = [];
@@ -18,6 +18,8 @@ export default class Wire {
     pcb;
     nextDirection = CARDINAL_DIRECTIONS.NORTH_WEST;
     preferredDirection;
+    path;
+    redraw = true;
 
     constructor(pcb, start, preferredDirection) {
         this.start = start;
@@ -26,59 +28,108 @@ export default class Wire {
         this.animationProgress = false;
     }
 
-    render(sketch) {
-        if (!this.preferredDirection && this.cells.length < CUT_OFF_LENGTH) {
-            return;
+    static setupStaticLinesContext(context) {
+        context.fillStyle = 'rgba(0,0,0,0)';
+        context.strokeStyle = standardColor;
+        context.lineWidth = CELL_SIZE / 4;
+    }
+
+    static setupAnimatedLinesContext(context) {
+        context.strokeStyle = animatedColor;
+    }
+
+    static setupPathEndsContext(context) {
+        context.fillStyle = 'rgb(26, 26, 26)';
+        context.lineWidth = CELL_SIZE / 6;
+    }
+
+    static setupStaticPathEndContext(context) {
+        context.strokeStyle = standardColor;
+    }
+
+    static setupAnimatedPathEndContext(context) {
+        context.strokeStyle = animatedColor;
+    }
+
+    get shouldRender() {
+        return this.preferredDirection || this.cells.length >= CUT_OFF_LENGTH;
+    }
+
+    renderStaticLines(context) {
+        if (this.path !== undefined && this.redraw) {
+            context.stroke(this.path);
+        }
+    }
+
+    renderAnimatedLines(context) {
+        if (this.animationProgress !== false) {
+            let hasMoved = false;
+            context.beginPath();
+
+            for (let i = Math.max(0, Math.floor(this.animationProgress)); i < Math.min(this.cells.length, Math.floor(this.animationProgress) + ANIMATION_RANGE); i++) {
+                const cell = this.cells[i];
+
+                if (!hasMoved) {
+                    context.moveTo((cell.x + .5) * CELL_SIZE, (cell.y + .5) * CELL_SIZE);
+                    hasMoved = true;
+                    continue;
+                }
+
+                context.lineTo((cell.x + .5) * CELL_SIZE, (cell.y + .5) * CELL_SIZE);
+            }
+
+            context.stroke();
+            this.redraw = true;
+        }
+    }
+
+    renderPathEnd(context, cell) {
+        if (this.redraw) {
+            context.beginPath();
+            context.arc((this.cells[cell].x + .5) * CELL_SIZE, (this.cells[cell].y + .5) * CELL_SIZE, (CELL_SIZE * .7) / 2, 0, 2 * Math.PI);
+            context.fill();
+            context.stroke();
+        }
+    }
+
+    getPathEndRenderers(context) {
+        let animatedEnds = [], staticEnds = [];
+
+        if (this.redraw) {
+            (this.animationProgress !== false && (0 > this.animationProgress && 0 < this.animationProgress + ANIMATION_RANGE) ? animatedEnds : staticEnds).push(() => this.renderPathEnd(context, 0));
+
+            const end = this.cells.length - 1;
+            (this.animationProgress !== false && (end > this.animationProgress && end < this.animationProgress + ANIMATION_RANGE) ? animatedEnds : staticEnds).push(() => this.renderPathEnd(context, end));
         }
 
+        return [staticEnds, animatedEnds];
+    }
+
+    prepareRender(context, delta) {
         if (this.animationProgress === false) {
-            if ((Math.floor(Math.random() * 100)) < 5) this.animationProgress = -animationRange;
+            if ((Math.floor(Math.random() * 100)) < 5) this.animationProgress = -ANIMATION_RANGE;
         } else if (this.animationProgress > this.cells.length) {
             this.animationProgress = false;
         } else {
-            this.animationProgress += sketch.deltaTime / 75;
+            this.animationProgress += delta / 40;
         }
 
-        sketch.noFill();
-        sketch.stroke.apply(sketch, standardColor);
-        sketch.strokeWeight(CELL_SIZE / 4);
-        sketch.beginShape();
-
-        let isAnimating = false;
-
-        for (let i = 0; i < this.cells.length; i++) {
-            const cell = this.cells[i];
-            const isNowAnimating = this.animationProgress !== false && (i > this.animationProgress && i < this.animationProgress + animationRange);
-
-            if (!isAnimating && isNowAnimating) {
-                sketch.vertex((cell.x + .5) * CELL_SIZE, (cell.y + .5) * CELL_SIZE);
-                sketch.endShape();
-                sketch.stroke.apply(sketch, animatedColor);
-                sketch.beginShape();
-            }
-
-            if (isAnimating && !isNowAnimating) {
-                sketch.vertex((cell.x + .5) * CELL_SIZE, (cell.y + .5) * CELL_SIZE);
-                sketch.endShape()
-                sketch.stroke.apply(sketch, standardColor);
-                sketch.beginShape();
-            }
-
-            sketch.vertex((cell.x + .5) * CELL_SIZE, (cell.y + .5) * CELL_SIZE);
-            isAnimating = isNowAnimating;
+        if (this.animationProgress !== false) {
+            this.redraw = true;
         }
-
-        sketch.endShape();
-        sketch.fill(26, 26, 26);
-        sketch.strokeWeight(CELL_SIZE / 6);
-
-        const end = this.cells.length - 1;
-
-        sketch.stroke.apply(sketch, this.animationProgress !== false && (0 > this.animationProgress && 0 < this.animationProgress + animationRange) ? animatedColor : standardColor);
-        sketch.ellipse((this.cells[0].x + .5) * CELL_SIZE, (this.cells[0].y + .5) * CELL_SIZE, CELL_SIZE * .7);
-
-        sketch.stroke.apply(sketch, this.animationProgress !== false && (end > this.animationProgress && end < this.animationProgress + animationRange) ? animatedColor : standardColor);
-        sketch.ellipse((this.cells[end].x + .5) * CELL_SIZE, (this.cells[end].y + .5) * CELL_SIZE, CELL_SIZE * .7);
+        // const end = this.cells.length - 1;
+        //
+        // context.strokeStyle = this.animationProgress !== false && (0 > this.animationProgress && 0 < this.animationProgress + ANIMATION_RANGE) ? animatedColor : standardColor;
+        // context.beginPath();
+        // context.arc((this.cells[0].x + .5) * CELL_SIZE, (this.cells[0].y + .5) * CELL_SIZE, (CELL_SIZE * .7) / 2, 0, 2 * Math.PI);
+        // context.fill();
+        // context.stroke();
+        //
+        // context.strokeStyle = this.animationProgress !== false && (end > this.animationProgress && end < this.animationProgress + ANIMATION_RANGE) ? animatedColor : standardColor;
+        // context.beginPath();
+        // context.arc((this.cells[end].x + .5) * CELL_SIZE, (this.cells[end].y + .5) * CELL_SIZE, (CELL_SIZE * .7) / 2, 0, 2 * Math.PI);
+        // context.fill();
+        // context.stroke();
     }
 
     addCellIfAvailable(previousCell, direction) {
@@ -158,6 +209,25 @@ export default class Wire {
         if (!this.preferredDirection && this.cells.length < CUT_OFF_LENGTH) {
             this.cells.forEach(cell => cell.available = true);
             this.cells = [];
+
+            return;
+        }
+
+        this.createPath();
+    }
+
+    createPath() {
+        this.path = new Path2D();
+
+        for (let i = 0; i < this.cells.length; i++) {
+            const cell = this.cells[i];
+
+            if (i === 0) {
+                this.path.moveTo((cell.x + .5) * CELL_SIZE, (cell.y + .5) * CELL_SIZE);
+                continue;
+            }
+
+            this.path.lineTo((cell.x + .5) * CELL_SIZE, (cell.y + .5) * CELL_SIZE);
         }
     }
 

@@ -26,12 +26,13 @@ export default class Chip {
         this.nextDirection = this.findOpenDir(start.x, start.y);
     }
 
-    render(sketch) {
-        sketch.fill(14, 29, 48);
-        sketch.strokeWeight(CELL_SIZE / 4);
-        sketch.stroke(221, 202, 160);
+    render(context, canvas, delta) {
+        context.fillStyle = 'rgb(14, 29, 48)';
+        context.lineWidth = CELL_SIZE / 4;
+        context.strokeStyle = 'rgb(221, 202, 160)';
 
-        sketch.rect((this.minX + 0.5) * CELL_SIZE, (this.minY + 0.5) * CELL_SIZE, (this.maxX - this.minX) * CELL_SIZE, (this.maxY - this.minY) * CELL_SIZE);
+        context.fillRect((this.minX + 0.5) * CELL_SIZE, (this.minY + 0.5) * CELL_SIZE, (this.maxX - this.minX) * CELL_SIZE, (this.maxY - this.minY) * CELL_SIZE);
+        context.strokeRect((this.minX + 0.5) * CELL_SIZE, (this.minY + 0.5) * CELL_SIZE, (this.maxX - this.minX) * CELL_SIZE, (this.maxY - this.minY) * CELL_SIZE);
     }
 
     generate(startingCell) {
